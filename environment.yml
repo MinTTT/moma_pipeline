@@ -1,0 +1,39 @@
+# Conda environment for moma-pipeline.
+# (Current development reuses the existing Moma_cellpose env; this file documents
+# a from-scratch equivalent.)
+name: Moma_pipeline
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.11
+  - matplotlib
+  - scikit-image
+  - scikit-learn
+  - pandas
+  - jupyterlab
+  - pip
+  - pip:
+    - torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+    - "cellpose[gui]==4.2.1.1"
+    - numba
+    - scipy
+    - opencv-python-headless
+    - pyqtgraph
+    - natsort
+    - tqdm
+    - "tifffile>=2025.6"
+    - fastremap
+    - roifile
+    - nd2
+    - lxml
+    - "joblib>=1.4"
+    - napari[pyqt6, optional]
+    - magicgui
+    - qtpy
+# omnishim is installed separately, editable:
+#   pip install -e G:\python_code\omnishim
+# then this package:
+#   pip install -e G:\python_code\Moma_pipeline --no-deps

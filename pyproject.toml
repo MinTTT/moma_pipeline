@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moma-pipeline"
+version = "0.1.0"
+description = "MotherMachine data analysis pipeline: ND2/FOV TIFFs -> channel & cell detection -> DT morphology exports"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "CHU Pan", email = "pan_chu@outlook.com" }]
+keywords = ["mother-machine", "cellpose", "omnipose", "morphology", "microscopy"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+  "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "scikit-image",
+  "opencv-python-headless",
+  "tifffile",
+  "tqdm",
+  "joblib>=1.4",
+  "numba",
+  "nd2",
+  "natsort",
+  "fastremap",
+  "cellpose>=4.2,<5",
+  "torch",
+  "torchvision",
+  "omnishim",
+]
+
+[project.optional-dependencies]
+viewer = ["napari[pyqt6]", "magicgui", "qtpy", "pyqtgraph"]
+dev = ["pytest", "pytest-timeout"]
+all = ["moma-pipeline[viewer,dev]"]
+
+[project.scripts]
+moma-fov-pipeline = "moma_pipeline.cli.fov_pipeline:main"
+moma-nd2-pipeline = "moma_pipeline.cli.nd2_pipeline:main"
+moma-cell-parameters = "moma_pipeline.cli.cell_parameters:main"
+moma-flu-distribution = "moma_pipeline.cli.flu_distribution:main"
+moma-view-timelapse = "moma_pipeline.viewers.lazy_timelapse:main"
+moma-view-fov = "moma_pipeline.viewers.fov_viewer:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["moma_pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]

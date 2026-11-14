@@ -1,0 +1,102 @@
+# Python / build artifacts
+__pycache__/
+*.py[cod]
+*.nbi
+*.nbc
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.log
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# Server / machine-specific configuration and secrets -- never commit
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.env
+!.env.example
+.ssh/
+.netrc
+*.pem
+*.key
+*.ppk
+id_rsa*
+id_ed25519*
+known_hosts
+*secret*
+*credential*
+*.kubeconfig
+.streamlit/secrets.toml
+sftp.json
+*server*.json
+*server*.yaml
+*server*.yml
+*server*.toml
+*server*.ini
+*server*.cfg
+*server*.conf
+*server*.csv
+*server_config*
+config.local.*
+local_config.*
+*.local.json
+*.local.yaml
+*.local.yml
+*.local.toml
+
+# Editor / IDE state (may hold machine-specific paths and remote settings)
+.vscode/
+.idea/
+.history/
+
+# ---------------------------------------------------------------------------
+# Model weights / checkpoints -- too large for git; distribute separately
+# ---------------------------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.h5
+*.hdf5
+*.keras
+*.tflite
+*.pb
+*.joblib
+*.bin
+*.pkl
+*.pickle
+checkpoints/
+**/models/*_epoch_*
+
+# ---------------------------------------------------------------------------
+# Runs and tests -- not versioned
+# ---------------------------------------------------------------------------
+runs/
+**/runs/
+outputs/
+wandb/
+mlruns/
+lightning_logs/
+tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Development run outputs (images, exported data, logs)
+scripts_dev/_sandbox/
+scripts_dev/integration_channel_gate/
+
+# Raw / exported image data
+*.tif
+*.tiff
+*.nd2
+*.zarr/
