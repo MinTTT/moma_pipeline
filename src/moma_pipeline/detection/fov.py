@@ -65,6 +65,7 @@ fov_cells_dict: {channel_key: {time_key: [cell]}}
 """
 
 #%%
+import enum
 import os
 import pickle
 
@@ -446,29 +447,40 @@ class MomaFOV:
 
         # 2. get the channel boxes
         channel_boxes_list = getBoundingRect(channel_mask)  # get all boxes
-        # check the boxes morphology, if the width or height is less of greater too much of the median value, remove it
-        channel_width_median = np.median([abs(box['xbr'] - box['xtl']) for box in channel_boxes_list])
-        channel_height_median = np.median([abs(box['ybr'] - box['ytl']) for box in channel_boxes_list])
-        for box in channel_boxes_list:
+        channel_box_value = list(range(1, len(channel_boxes_list)+1))
+        # check the boxes morphology, if the width or height is less of greater too much of the 0.9 quantile value, remove it
+        channel_height_9quantile = np.quantile([abs(box['ybr'] - box['ytl']) for box in channel_boxes_list], 0.90)
+        channel_width_9quantile = np.quantile([abs(box['xbr'] - box['xtl']) for box in channel_boxes_list], 0.90)
+        print(f'Channel width 90% quantile: {channel_width_9quantile}')
+        print(f'Channel height 90% quantile: {channel_height_9quantile}')
+        remove_num = 0
+        channel_num = len(channel_boxes_list)
+        valid_channel_list =[]
+        valid_channel_value = []
+        for box_i, box in enumerate(channel_boxes_list):
             box_width = abs(box['xbr'] - box['xtl'])
             box_height = abs(box['ybr'] - box['ytl'])
-            if box_width < channel_width_median * 0.1 or box_width > channel_width_median * 2 or \
-                    box_height < channel_height_median * 0.1 or box_height > channel_height_median * 2:
-                channel_boxes_list.remove(box)
-        self.log_recorder.write_log(f'{get_time_now()} Moma_CPM -> {self.fov_name}: {len(channel_boxes_list)} channels detected.')
+            if box_width < channel_width_9quantile * 0.4 or box_width > channel_width_9quantile * 1.2 or \
+                    box_height < channel_height_9quantile * 0.4 or box_height > channel_height_9quantile * 1.2:
+                remove_num += 1
+            else:
+                valid_channel_list.append(box)
+                valid_channel_value.append(channel_box_value[box_i])
+        print(f'{remove_num}/{channel_num} channels removed due to their morphology.')
+        self.log_recorder.write_log(f'{get_time_now()} Moma_CPM -> {self.fov_name}: {len(valid_channel_list)} channels detected.')
         # 3. determine the direction of the channel
         # for one FOV, there may have multiple rows of channels, and they may have different directions.
         # 3.a determine the rows of channels, and determine the direction of each row
         rows_boxes_y_center = {}  # type is Dict[int, List[int]] ## it stores the y center of the boxes in each row
         rows_boxes = {}  # type is Dict[int, List[Dict[str, int]]] ## it stores the boxes bounding box in each row
         rows_boxes_mask_values = {}  # type is Dict[int, List[int]] ## it stores the boxes mask values in each row
-        for box_i, box in enumerate(channel_boxes_list):
+        for box_i, box in enumerate(valid_channel_list):
             box_y_center = (box['ytl'] + box['ybr']) // 2
             box_height = abs(box['ybr'] - box['ytl'])
             if len(rows_boxes_y_center) == 0:
                 rows_boxes_y_center[1] = [box_y_center]
                 rows_boxes[1] = [box]
-                rows_boxes_mask_values[1] = [box_i + 1]
+                rows_boxes_mask_values[1] = [valid_channel_value[box_i]]
             else:
                 # if a new box center is close to the mean of the existing rows, add it to the existing row
                 match_row_flag = False
@@ -477,7 +489,7 @@ class MomaFOV:
                     if abs(row_mean - box_y_center) <= box_height * 0.8:  # 80% of the box height
                         rows_boxes_y_center[row_index].append(box_y_center)
                         rows_boxes[row_index].append(box)
-                        rows_boxes_mask_values[row_index].append(box_i + 1)
+                        rows_boxes_mask_values[row_index].append(valid_channel_value[box_i])
                         match_row_flag = True
                         break
                     else:
@@ -487,7 +499,7 @@ class MomaFOV:
                 if not match_row_flag:
                     rows_boxes_y_center[len(rows_boxes_y_center) + 1] = [box_y_center]
                     rows_boxes[len(rows_boxes) + 1] = [box]
-                    rows_boxes_mask_values[len(rows_boxes_mask_values) + 1] = [box_i + 1]
+                    rows_boxes_mask_values[len(rows_boxes_mask_values) + 1] = [valid_channel_value[box_i]]
         self.log_recorder.write_log(f'{get_time_now()} Moma_CPM -> {self.fov_name}: {len(rows_boxes_y_center)} rows of channels detected.')
         for row_index in rows_boxes_y_center:
             self.log_recorder.write_log(f'    Row {row_index}: {len(rows_boxes_y_center[row_index])} boxes detected, '
