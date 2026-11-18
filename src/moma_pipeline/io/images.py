@@ -10,7 +10,7 @@ Ported from Moma_cellPose/utilities.py into the moma_pipeline package
 @modified by: CHU Pan
 
 """
-from typing import Union, Iterable, Dict, List, Optional
+from typing import Union, Iterable, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -391,6 +391,52 @@ def getBoundingRect(chambers_mask: np.ndarray) -> List[Dict[str, int]]:
     return outboxes
 
 
+def _largest_contour(single_chamber_mask: np.ndarray) -> Optional[np.ndarray]:
+    """
+    Return the largest external contour of a binary mask, or None if the mask is empty.
+
+    getLabeledBoundingRects() and getChamberBoxes_CPM() both use this, so a label that is
+    split into several pieces always resolves to the same piece.
+    """
+    contours = cv2.findContours(single_chamber_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+    if len(contours) == 0:
+        return None
+    return max(contours, key=cv2.contourArea)
+
+
+def getLabeledBoundingRects(chambers_mask: np.ndarray) -> List[Tuple[int, Dict[str, int]]]:
+    """
+    This function extracts one bounding box per label in the labeled chamber mask.
+
+    Unlike getBoundingRect(), which returns one box per contour, each box is paired with
+    the label value it came from, so the pairs can be filtered or regrouped without losing
+    track of their label. If a label is split into several pieces, only its largest contour
+    is used (the same contour getChamberBoxes_CPM() picks).
+
+    Parameters
+    ----------
+    chambers_mask : 2D array of uint8/uint16/floats
+        The labeled mask of the chambers, 0 is background.
+
+    Returns
+    -------
+    label_boxes : List[Tuple[int, Dict[str, int]]]
+        List of (label, box) pairs sorted by label. box has the same keys as in getBoundingRect().
+
+    """
+    label_boxes = []
+    for chamber_value in np.unique(chambers_mask):
+        if chamber_value == 0:
+            continue
+        contour = _largest_contour(chambers_mask == chamber_value)
+        if contour is None:
+            continue
+        xtl, ytl, boxwidth, boxheight = cv2.boundingRect(contour)
+        label_boxes.append((int(chamber_value), dict(xtl=xtl, ytl=ytl, xbr=xtl + boxwidth, ybr=ytl + boxheight)))
+
+    return label_boxes
+
+
 def getChamberBoxes_CPM(chambers_mask: np.ndarray, wide_channer=True, flip=False) -> List[Dict[str, int]]:
     """
     This function extracts the bounding boxes of the chambers in the binary mask
@@ -411,6 +457,8 @@ def getChamberBoxes_CPM(chambers_mask: np.ndarray, wide_channer=True, flip=False
     -------
     chamberboxes : List[Dict[str, int]]
         List of cropping box dictionaries (see cropbox()).
+        One box per label present in the mask; if a label is split into several pieces,
+        its largest contour is used (see getLabeledBoundingRects()).
 
     Change log
     ----------
@@ -420,12 +468,12 @@ def getChamberBoxes_CPM(chambers_mask: np.ndarray, wide_channer=True, flip=False
 
     chamberboxes = []
 
-    chamber_num = int(chambers_mask.max())
-
-    for chamber_value in range(1, chamber_num + 1):
+    for chamber_value in np.unique(chambers_mask):
+        if chamber_value == 0:
+            continue
 
         single_chamber_mask = (chambers_mask == chamber_value).astype(np.uint8)
-        contour = cv2.findContours(single_chamber_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0][0]
+        contour = _largest_contour(single_chamber_mask)
         y_length, x_length = single_chamber_mask.shape
         xtl, ytl, boxwidth, boxheight = cv2.boundingRect(contour)
         if flip is False:

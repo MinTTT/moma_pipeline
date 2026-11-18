@@ -65,7 +65,6 @@ fov_cells_dict: {channel_key: {time_key: [cell]}}
 """
 
 #%%
-import enum
 import os
 import pickle
 
@@ -79,7 +78,7 @@ from moma_pipeline.core.logging import LogRecorder, SafeLogRecorder  # noqa: F40
 from moma_pipeline.core.fov_utils import get_time_now
 from moma_pipeline.io.images import (read_image, driftcorr, cropbox,
                                      getDriftTemplate, getChamberBoxes_CPM,
-                                     getBoundingRect, filter_small_cells)
+                                     getLabeledBoundingRects, filter_small_cells)
 from moma_pipeline.io.contours import cv_find_contours  # noqa: F401
 from moma_pipeline.io.dt_exports import export_cells_to_dataframe_dt
 from moma_pipeline.io.fov_pkl import (export_Moma_fov_data_dt,
@@ -445,19 +444,18 @@ class MomaFOV:
         if channel_numbers == 0:
             return 1  # no channels detected, return 1 to indicate no channels found
 
-        # 2. get the channel boxes
-        channel_boxes_list = getBoundingRect(channel_mask)  # get all boxes
-        channel_box_value = list(range(1, len(channel_boxes_list)+1))
+        # 2. get the channel boxes as (label, box) pairs, so each box keeps its real label in channel_mask
+        channel_label_boxes = getLabeledBoundingRects(channel_mask)  # type is List[Tuple[int, Dict[str, int]]]
         # check the boxes morphology, if the width or height is less of greater too much of the 0.9 quantile value, remove it
-        channel_height_9quantile = np.quantile([abs(box['ybr'] - box['ytl']) for box in channel_boxes_list], 0.90)
-        channel_width_9quantile = np.quantile([abs(box['xbr'] - box['xtl']) for box in channel_boxes_list], 0.90)
+        channel_height_9quantile = np.quantile([abs(box['ybr'] - box['ytl']) for _, box in channel_label_boxes], 0.90)
+        channel_width_9quantile = np.quantile([abs(box['xbr'] - box['xtl']) for _, box in channel_label_boxes], 0.90)
         print(f'Channel width 90% quantile: {channel_width_9quantile}')
         print(f'Channel height 90% quantile: {channel_height_9quantile}')
         remove_num = 0
-        channel_num = len(channel_boxes_list)
+        channel_num = len(channel_label_boxes)
         valid_channel_list =[]
         valid_channel_value = []
-        for box_i, box in enumerate(channel_boxes_list):
+        for mask_value, box in channel_label_boxes:
             box_width = abs(box['xbr'] - box['xtl'])
             box_height = abs(box['ybr'] - box['ytl'])
             if box_width < channel_width_9quantile * 0.4 or box_width > channel_width_9quantile * 1.2 or \
@@ -465,7 +463,7 @@ class MomaFOV:
                 remove_num += 1
             else:
                 valid_channel_list.append(box)
-                valid_channel_value.append(channel_box_value[box_i])
+                valid_channel_value.append(mask_value)
         print(f'{remove_num}/{channel_num} channels removed due to their morphology.')
         self.log_recorder.write_log(f'{get_time_now()} Moma_CPM -> {self.fov_name}: {len(valid_channel_list)} channels detected.')
         # 3. determine the direction of the channel
@@ -574,6 +572,11 @@ class MomaFOV:
             del channel_boxes[box_index]
             del channels_image[box_index]
             del channel_directions[box_index]
+
+        # 4.d if every channel was removed by the filters above, stop before running the cell model on an empty list
+        if len(channels_image) == 0:
+            self.log_recorder.write_log(f'{get_time_now()} Moma_CPM -> {self.fov_name}: No channels left after filtering')
+            return 1
 
         channels_image_list = list(channels_image.values())
         cells_mask = self.MoMa_CP_model.eval_images(channels_image_list, model='cell')[0]
